@@ -10,7 +10,7 @@ import CalendarPage from './pages/CalendarPage'
 import OrdersPage from './pages/OrdersPage'
 import CustomersPage from './pages/CustomersPage'
 import CustomerDetailPage from './pages/CustomerDetailPage'
-import MaterialsPage from './pages/MaterialsPage'
+import SpendingPage from './pages/SpendingPage'
 import SummaryPage from './pages/SummaryPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -24,7 +24,7 @@ const MENU_LINKS = [
   { to: '/today',     label: 'Today' },
   { to: '/calendar',  label: 'Calendar' },
   { to: '/customers', label: 'Customers' },
-  { to: '/materials', label: 'Materials' },
+  { to: '/spending',  label: 'Spending' },
   { to: '/settings',  label: 'Setup' },
 ]
 
@@ -77,7 +77,7 @@ export default function App() {
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:id" element={<CustomerDetailPage />} />
-        <Route path="/materials" element={<MaterialsPage />} />
+        <Route path="/spending" element={<SpendingPage />} />
         <Route path="/summary" element={<SummaryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/today" replace />} />

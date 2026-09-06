@@ -16,7 +16,7 @@ export default function CustomerDetailPage() {
     setLoading(true)
     Promise.all([
       supabase.from('customers').select('*').eq('id', id).single(),
-      supabase.from('order_summary').select('*').eq('customer_id', id)
+      supabase.from('order_summary').select('*').eq('customer_id', id).is('deleted_at', null)
         .order('order_date', { ascending: false }),
     ]).then(([c, o]) => {
       if (off) return
@@ -26,6 +26,13 @@ export default function CustomerDetailPage() {
     })
     return () => { off = true }
   }, [id, reload])
+
+  async function updateCustomerNo(value) {
+    const n = Number(value)
+    if (value === '' || Number.isNaN(n)) return
+    await supabase.from('customers').update({ customer_no: n }).eq('id', id)
+    setCustomer(c => ({ ...c, customer_no: n }))
+  }
 
   if (loading) return <div className="page"><p className="muted">Loading…</p></div>
   if (!customer) return <div className="page"><p className="muted">Customer not found.</p></div>
@@ -37,10 +44,21 @@ export default function CustomerDetailPage() {
   return (
     <div className="page">
       <h1 className="page-title">{customer.name}</h1>
-      <p className="range-line">
-        <span className="mono">#{customer.customer_no}</span> ·{' '}
-        <span className="mono">{customer.phone}</span>
-      </p>
+
+      <div className="card">
+        <div className="row-2">
+          <div className="field">
+            <label htmlFor="cno">Customer number</label>
+            <input id="cno" type="number" min="0" className="mono"
+              defaultValue={customer.customer_no}
+              onBlur={e => updateCustomerNo(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Phone</label>
+            <input className="mono" value={customer.phone} disabled readOnly />
+          </div>
+        </div>
+      </div>
 
       <div className="stat-grid">
         <div className="stat">

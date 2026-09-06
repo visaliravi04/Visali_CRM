@@ -27,12 +27,13 @@ export default function TodayPage() {
     let off = false
     setLoading(true)
     Promise.all([
-      supabase.from('order_summary').select('*').in('status', ['open', 'ready']).limit(500),
+      supabase.from('order_summary').select('*').is('deleted_at', null)
+        .in('status', ['open', 'ready']).limit(500),
       supabase.from('courier_zones').select('*'),
       supabase.from('shop_settings').select('*').eq('id', 1).single(),
-      supabase.from('order_summary').select('*')
+      supabase.from('order_summary').select('*').is('deleted_at', null)
         .or(`and(order_date.gte.${wFrom},order_date.lte.${wTo}),and(due_date.gte.${wFrom},due_date.lte.${wTo})`),
-      supabase.from('order_summary').select('*')
+      supabase.from('order_summary').select('*').is('deleted_at', null)
         .or(`and(order_date.gte.${mFrom},order_date.lte.${mTo}),and(due_date.gte.${mFrom},due_date.lte.${mTo})`),
     ]).then(([o, z, s, w, m]) => {
       if (off) return

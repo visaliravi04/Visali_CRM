@@ -62,6 +62,36 @@ export default function OrderCard({ order, onChanged, compact }) {
     onChanged?.()
   }
 
+  async function updateCustomerNo(value) {
+    const n = Number(value)
+    if (value === '' || Number.isNaN(n) || n === order.customer_no) return
+    await supabase.from('customers').update({ customer_no: n }).eq('id', order.customer_id)
+    onChanged?.()
+  }
+
+  async function deleteOrder() {
+    if (!confirm(`Delete order #${order.order_no} for ${order.customer_name}? It stays in the recycle bin for a day before being removed for good.`)) return
+    setBusy(true)
+    await supabase.from('orders').update({ deleted_at: new Date().toISOString() }).eq('id', order.id)
+    setBusy(false)
+    onChanged?.()
+  }
+
+  async function restoreOrder() {
+    setBusy(true)
+    await supabase.from('orders').update({ deleted_at: null }).eq('id', order.id)
+    setBusy(false)
+    onChanged?.()
+  }
+
+  async function purgeOrder() {
+    if (!confirm('Permanently delete this order? This cannot be undone.')) return
+    setBusy(true)
+    await supabase.from('orders').delete().eq('id', order.id)
+    setBusy(false)
+    onChanged?.()
+  }
+
   async function saveCourier() {
     setBusy(true)
     await supabase.from('orders').update({
@@ -100,11 +130,16 @@ export default function OrderCard({ order, onChanged, compact }) {
   }
 
   return (
-    <article className={`order ${state}`}>
+    <article className={`order ${state} ${order.deleted_at ? 'deleted' : ''}`}>
       <div className="order-who">
         <NavLink to={`/customers/${order.customer_id}`} className="order-name">
           {order.customer_name}
         </NavLink>
+        <span className="cust-no-label mono dim">Cust</span>
+        <input type="number" min="0" className="mono cust-no-inline"
+          defaultValue={order.customer_no} title="Customer number"
+          key={order.customer_no}
+          onBlur={e => updateCustomerNo(e.target.value)} />
         <span className="order-no mono">#{order.order_no}</span>
       </div>
       <button className="order-top" onClick={() => setOpen(o => !o)} aria-expanded={open}>
@@ -222,31 +257,47 @@ export default function OrderCard({ order, onChanged, compact }) {
               )}
 
               <div className="order-actions">
-                {order.completed_qty > 0 && order.status !== 'delivered' && (
-                  <button className="btn-send" onClick={sendMessage}>
-                    Message {order.customer_name.split(' ')[0]}
-                  </button>
-                )}
-                {order.status !== 'delivered' && order.status !== 'cancelled' && (
-                  <NavLink className="btn-ghost btn-sm" to={`/orders/${order.id}/edit`}>
-                    Edit
-                  </NavLink>
-                )}
-                <NavLink className="btn-ghost btn-sm" to={`/orders/${order.id}/receipt`}>
-                  Save as PDF
-                </NavLink>
-                {order.status === 'open' && allDone && (
-                  <button className="btn-primary btn-sm" onClick={() => markStatus('ready')} disabled={busy}>
-                    Mark ready
-                  </button>
-                )}
-                {order.status !== 'delivered' && order.status !== 'cancelled' && (
-                  <button className="btn-ghost btn-sm" onClick={() => markStatus('delivered')} disabled={busy}>
-                    Mark delivered
-                  </button>
-                )}
-                {order.status === 'delivered' && (
-                  <span className="delivered-tag">Delivered</span>
+                {order.deleted_at ? (
+                  <>
+                    <button className="btn-ghost btn-sm" onClick={restoreOrder} disabled={busy}>
+                      Restore
+                    </button>
+                    <button type="button" className="link-danger" onClick={purgeOrder} disabled={busy}>
+                      Delete forever
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {order.completed_qty > 0 && order.status !== 'delivered' && (
+                      <button className="btn-send" onClick={sendMessage}>
+                        Message {order.customer_name.split(' ')[0]}
+                      </button>
+                    )}
+                    {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                      <NavLink className="btn-ghost btn-sm" to={`/orders/${order.id}/edit`}>
+                        Edit
+                      </NavLink>
+                    )}
+                    <NavLink className="btn-ghost btn-sm" to={`/orders/${order.id}/receipt`}>
+                      Save as PDF
+                    </NavLink>
+                    {order.status === 'open' && allDone && (
+                      <button className="btn-primary btn-sm" onClick={() => markStatus('ready')} disabled={busy}>
+                        Mark ready
+                      </button>
+                    )}
+                    {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                      <button className="btn-ghost btn-sm" onClick={() => markStatus('delivered')} disabled={busy}>
+                        Mark delivered
+                      </button>
+                    )}
+                    {order.status === 'delivered' && (
+                      <span className="delivered-tag">Delivered</span>
+                    )}
+                    <button type="button" className="link-danger" onClick={deleteOrder} disabled={busy}>
+                      Delete
+                    </button>
+                  </>
                 )}
               </div>
             </>

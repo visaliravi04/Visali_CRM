@@ -90,6 +90,13 @@ export default function OrderReceipt() {
         </div>
       </section>
 
+      {order.measurements && (
+        <section className="receipt-section">
+          <h2>Measurements</h2>
+          <p>{order.measurements}</p>
+        </section>
+      )}
+
       {order.notes && (
         <section className="receipt-section">
           <h2>Note</h2>

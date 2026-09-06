@@ -8,7 +8,10 @@ const FILTERS = [
   { id: 'overdue',   label: 'Overdue' },
   { id: 'today',     label: 'Today' },
   { id: 'delivered', label: 'Delivered' },
+  { id: 'deleted',   label: 'Deleted' },
 ]
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([])
@@ -20,18 +23,30 @@ export default function OrdersPage() {
   useEffect(() => {
     let off = false
     setLoading(true)
-    let sel = supabase.from('order_summary').select('*')
 
-    if (filter === 'delivered') sel = sel.eq('status', 'delivered')
-    else sel = sel.in('status', ['open', 'ready'])
+    ;(async () => {
+      let sel = supabase.from('order_summary').select('*')
 
-    if (filter === 'overdue') sel = sel.lt('due_date', todayISO())
-    if (filter === 'today')   sel = sel.eq('due_date', todayISO())
+      if (filter === 'deleted') {
+        // Sweep anything past its day in the bin before listing what's left
+        const cutoff = new Date(Date.now() - DAY_MS).toISOString()
+        await supabase.from('orders').delete().lt('deleted_at', cutoff)
+        sel = sel.not('deleted_at', 'is', null)
+      } else {
+        sel = sel.is('deleted_at', null)
+        if (filter === 'delivered') sel = sel.eq('status', 'delivered')
+        else sel = sel.in('status', ['open', 'ready'])
+        if (filter === 'overdue') sel = sel.lt('due_date', todayISO())
+        if (filter === 'today')   sel = sel.eq('due_date', todayISO())
+      }
 
-    sel.order('due_date', { ascending: filter !== 'delivered' })
-      .order('due_time', { nullsFirst: false })
-      .limit(300)
-      .then(({ data }) => { if (!off) { setOrders(data || []); setLoading(false) } })
+      const { data } = await sel
+        .order('due_date', { ascending: filter !== 'delivered' && filter !== 'deleted' })
+        .order('due_time', { nullsFirst: false })
+        .limit(300)
+      if (!off) { setOrders(data || []); setLoading(false) }
+    })()
+
     return () => { off = true }
   }, [filter, reload])
 

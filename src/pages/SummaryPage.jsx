@@ -18,7 +18,7 @@ export default function SummaryPage() {
   useEffect(() => {
     let off = false
     setLoading(true)
-    supabase.from('order_summary').select('*')
+    supabase.from('order_summary').select('*').is('deleted_at', null)
       .or(`and(order_date.gte.${from},order_date.lte.${to}),and(due_date.gte.${from},due_date.lte.${to})`)
       .order('due_date')
       .then(({ data }) => { if (!off) { setRows(data || []); setLoading(false) } })

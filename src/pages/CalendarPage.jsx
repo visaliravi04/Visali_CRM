@@ -23,6 +23,7 @@ export default function CalendarPage() {
     supabase.from('order_summary').select('*')
       .gte('due_date', from).lte('due_date', to)
       .neq('status', 'cancelled')
+      .is('deleted_at', null)
       .order('due_date').order('due_time', { nullsFirst: false })
       .then(({ data }) => { if (!off) { setOrders(data || []); setLoading(false) } })
     return () => { off = true }

@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams, NavLink } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { money, todayISO, RUPEE } from '../lib/helpers'
+import { uploadDesignPhoto } from '../lib/storage'
+import CameraCapture from '../components/CameraCapture'
 
 const BLANK_LINE = () => ({
   key: Math.random().toString(36).slice(2),
@@ -13,7 +15,10 @@ const BLANK_LINE = () => ({
   design_ref_url: '',
   item_notes: '',
   completed_qty: 0,
+  uploading: false,
 })
+
+const DRAFT_KEY = 'stitch:new-order-draft'
 
 /** Shared by NewOrder ("new") and EditOrder ("edit") — same fields, different save path. */
 export default function OrderForm({ formMode }) {
@@ -35,11 +40,14 @@ export default function OrderForm({ formMode }) {
   const [dueTime, setDueTime] = useState('')
   const [advance, setAdvance] = useState('')
   const [notes, setNotes] = useState('')
+  const [measurements, setMeasurements] = useState('')
   const [mode, setMode] = useState('pickup')
   const [courierDestination, setCourierDestination] = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [savedOrder, setSavedOrder] = useState(null)
+  const [draftReady, setDraftReady] = useState(isEdit)
+  const [cameraFor, setCameraFor] = useState(null)
   const nameRef = useRef(null)
 
   useEffect(() => {
@@ -67,6 +75,7 @@ export default function OrderForm({ formMode }) {
         setMode(ord.delivery_mode)
         setCourierDestination(ord.courier_destination || '')
         setNotes(ord.notes || '')
+        setMeasurements(ord.measurements || '')
       }
       setLines(
         (i.data || []).map(it => ({
@@ -98,6 +107,37 @@ export default function OrderForm({ formMode }) {
     return () => { cancelled = true; clearTimeout(t) }
   }, [isEdit, name])
 
+  // New mode: restore an in-progress draft (e.g. the shop tapped over to
+  // Calendar mid-entry to check a free delivery date, then came back)
+  useEffect(() => {
+    if (isEdit) return
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) {
+        const d = JSON.parse(raw)
+        if (d.name) setName(d.name)
+        if (d.phone) setPhone(d.phone)
+        if (d.lines?.length) setLines(d.lines)
+        if (d.dueDate) setDueDate(d.dueDate)
+        if (d.dueTime) setDueTime(d.dueTime)
+        if (d.advance) setAdvance(d.advance)
+        if (d.notes) setNotes(d.notes)
+        if (d.measurements) setMeasurements(d.measurements)
+        if (d.mode) setMode(d.mode)
+        if (d.courierDestination) setCourierDestination(d.courierDestination)
+      }
+    } catch { /* ignore a corrupt draft */ }
+    setDraftReady(true)
+  }, [isEdit])
+
+  // New mode: keep the draft current so it survives a trip to another tab
+  useEffect(() => {
+    if (isEdit || !draftReady) return
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      name, phone, lines, dueDate, dueTime, advance, notes, measurements, mode, courierDestination,
+    }))
+  }, [isEdit, draftReady, name, phone, lines, dueDate, dueTime, advance, notes, measurements, mode, courierDestination])
+
   const total = lines.reduce((s, l) => s + Number(l.qty || 0) * Number(l.unit_price || 0), 0)
   const balance = total - Number(advance || 0)
 
@@ -114,6 +154,18 @@ export default function OrderForm({ formMode }) {
     })
   }
 
+  async function handlePhoto(key, file) {
+    if (!file) return
+    setLine(key, { uploading: true })
+    try {
+      const url = await uploadDesignPhoto(file)
+      setLine(key, { design_ref_url: url, uploading: false })
+    } catch (e2) {
+      setLine(key, { uploading: false })
+      setErr(e2.message || 'Could not upload the photo.')
+    }
+  }
+
   async function save(e) {
     e.preventDefault()
     setErr('')
@@ -125,6 +177,7 @@ export default function OrderForm({ formMode }) {
     }
     if (clean.length === 0) return setErr('Add at least one item to the order.')
     if (!dueDate) return setErr('Set the delivery date.')
+    if (clean.some(l => l.uploading)) return setErr('Wait for the photo to finish uploading.')
     for (const l of clean) {
       if (Number(l.qty) < Number(l.completed_qty || 0)) {
         return setErr(`"${l.service_name}" already has ${l.completed_qty} finished — count can't go below that.`)
@@ -162,6 +215,7 @@ export default function OrderForm({ formMode }) {
           courier_destination: mode === 'courier' ? (courierDestination.trim() || null) : null,
           total_amount: total,
           notes: notes.trim() || null,
+          measurements: measurements.trim() || null,
         }).eq('id', orderId)
         if (oErr) throw oErr
 
@@ -190,6 +244,7 @@ export default function OrderForm({ formMode }) {
         courier_destination: mode === 'courier' ? (courierDestination.trim() || null) : null,
         total_amount: total,
         notes: notes.trim() || null,
+        measurements: measurements.trim() || null,
       }).select('id, order_no').single()
       if (oErr) throw oErr
 
@@ -212,6 +267,7 @@ export default function OrderForm({ formMode }) {
         })
       }
 
+      localStorage.removeItem(DRAFT_KEY)
       setSavedOrder(order)
     } catch (e2) {
       setErr(e2.message || 'Could not save the order.')
@@ -318,9 +374,21 @@ export default function OrderForm({ formMode }) {
             </div>
 
             <div className="field">
-              <label>Design reference link</label>
+              <label>Design reference</label>
               <input type="url" value={l.design_ref_url} placeholder="Pinterest or photo link"
                 onChange={e => setLine(l.key, { design_ref_url: e.target.value })} />
+              <div className="photo-buttons">
+                <button type="button" className="btn-ghost btn-sm photo-btn"
+                  onClick={() => setCameraFor(l.key)}>
+                  Take photo
+                </button>
+                <label className="btn-ghost btn-sm photo-btn">
+                  Choose from gallery
+                  <input type="file" accept="image/*" hidden
+                    onChange={e => { handlePhoto(l.key, e.target.files[0]); e.target.value = '' }} />
+                </label>
+              </div>
+              {l.uploading && <p className="hint">Uploading photo…</p>}
             </div>
 
             <div className="field">
@@ -401,6 +469,12 @@ export default function OrderForm({ formMode }) {
       )}
 
       <section className="card">
+        <h2 className="card-label">Measurements</h2>
+        <textarea rows={4} value={measurements} onChange={e => setMeasurements(e.target.value)}
+          placeholder="Chest, waist, length, sleeve…" />
+      </section>
+
+      <section className="card">
         <h2 className="card-label">Order note</h2>
         <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
           placeholder="Anything to remember about this order" />
@@ -411,6 +485,13 @@ export default function OrderForm({ formMode }) {
       <button className="btn-primary btn-wide" disabled={saving}>
         {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save order'}
       </button>
+
+      {cameraFor && (
+        <CameraCapture
+          onClose={() => setCameraFor(null)}
+          onCapture={blob => { handlePhoto(cameraFor, blob); setCameraFor(null) }}
+        />
+      )}
     </form>
   )
 }

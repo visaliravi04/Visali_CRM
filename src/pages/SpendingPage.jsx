@@ -4,11 +4,21 @@ import {
   money, todayISO, startOfWeek, endOfWeek, monthRange, shortDate, longDate, RUPEE,
 } from '../lib/helpers'
 
+const CATEGORIES = [
+  { id: 'material',     label: 'Material' },
+  { id: 'rent',         label: 'Rent' },
+  { id: 'electricity',  label: 'Electricity' },
+  { id: 'wages',        label: 'Wages' },
+  { id: 'transport',    label: 'Transport' },
+  { id: 'other',        label: 'Other' },
+]
+
 const BLANK_FORM = () => ({
-  purchase_date: todayISO(), item: '', quantity: '', unit: '', cost: '', supplier: '', notes: '',
+  purchase_date: todayISO(), category: 'material', item: '',
+  quantity: '', unit: '', cost: '', supplier: '', notes: '',
 })
 
-export default function MaterialsPage() {
+export default function SpendingPage() {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState('week')
@@ -18,7 +28,7 @@ export default function MaterialsPage() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('material_costs').select('*')
+    const { data } = await supabase.from('spending').select('*')
       .order('purchase_date', { ascending: false }).limit(300)
     setEntries(data || [])
     setLoading(false)
@@ -40,12 +50,13 @@ export default function MaterialsPage() {
   async function addEntry(e) {
     e.preventDefault()
     setErr('')
-    if (!form.item.trim()) return setErr('Add what was bought.')
+    if (!form.item.trim()) return setErr('Add what this was for.')
     if (!form.purchase_date) return setErr('Set the date.')
 
     setSaving(true)
-    const { error } = await supabase.from('material_costs').insert({
+    const { error } = await supabase.from('spending').insert({
       purchase_date: form.purchase_date,
+      category: form.category,
       item: form.item.trim(),
       quantity: form.quantity ? Number(form.quantity) : null,
       unit: form.unit.trim() || null,
@@ -60,16 +71,16 @@ export default function MaterialsPage() {
   }
 
   async function removeEntry(id) {
-    await supabase.from('material_costs').delete().eq('id', id)
+    await supabase.from('spending').delete().eq('id', id)
     load()
   }
 
   return (
     <div className="page">
-      <h1 className="page-title">Materials</h1>
+      <h1 className="page-title">Spending</h1>
 
       <form className="card" onSubmit={addEntry}>
-        <h2 className="card-label">Log a purchase</h2>
+        <h2 className="card-label">Log an expense</h2>
         <div className="row-2">
           <div className="field">
             <label htmlFor="mdate">Date</label>
@@ -77,14 +88,16 @@ export default function MaterialsPage() {
               onChange={e => setForm(f => ({ ...f, purchase_date: e.target.value }))} />
           </div>
           <div className="field">
-            <label htmlFor="mcost">Cost ({RUPEE})</label>
-            <input id="mcost" type="number" min="0" value={form.cost}
-              onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="0" />
+            <label htmlFor="mcat">Category</label>
+            <select id="mcat" value={form.category}
+              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
           </div>
         </div>
         <div className="field">
           <label htmlFor="mitem">Item</label>
-          <input id="mitem" value={form.item} placeholder="Fabric, thread, lining…"
+          <input id="mitem" value={form.item} placeholder="Fabric, rent, electricity bill…"
             onChange={e => setForm(f => ({ ...f, item: e.target.value }))} />
         </div>
         <div className="row-2">
@@ -99,10 +112,17 @@ export default function MaterialsPage() {
               onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
           </div>
         </div>
-        <div className="field">
-          <label htmlFor="msupplier">Supplier</label>
-          <input id="msupplier" value={form.supplier}
-            onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
+        <div className="row-2">
+          <div className="field">
+            <label htmlFor="mcost">Cost ({RUPEE})</label>
+            <input id="mcost" type="number" min="0" value={form.cost}
+              onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="0" />
+          </div>
+          <div className="field">
+            <label htmlFor="msupplier">Supplier</label>
+            <input id="msupplier" value={form.supplier}
+              onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
+          </div>
         </div>
         <div className="field">
           <label htmlFor="mnotes">Note</label>
