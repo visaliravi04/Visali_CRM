@@ -325,12 +325,15 @@ alter table orders add column if not exists deleted_at timestamptz;
 alter table orders add column if not exists measurements text;
 create index if not exists orders_deleted_idx on orders(deleted_at);
 
+-- CREATE OR REPLACE VIEW cannot rename or reorder existing columns, only
+-- append new ones — so every column from the original view stays in its
+-- original position/name here, with courier_destination/measurements/
+-- deleted_at/customer_no added at the end.
 create or replace view order_summary as
 select
   o.id,
   o.order_no,
   o.customer_id,
-  c.customer_no as customer_no,
   c.name  as customer_name,
   c.phone as customer_phone,
   o.order_date,
@@ -341,17 +344,18 @@ select
   o.courier_name,
   o.courier_tracking,
   o.courier_receipt_url,
-  o.courier_destination,
   o.total_amount,
   o.notes,
-  o.measurements,
-  o.deleted_at,
   o.delivered_at,
   o.created_at,
   coalesce(i.total_qty, 0)      as total_qty,
   coalesce(i.completed_qty, 0)  as completed_qty,
   coalesce(p.paid, 0)           as amount_paid,
-  o.total_amount - coalesce(p.paid, 0) as amount_due
+  o.total_amount - coalesce(p.paid, 0) as amount_due,
+  o.courier_destination,
+  o.measurements,
+  o.deleted_at,
+  c.customer_no
 from orders o
 join customers c on c.id = o.customer_id
 left join (

@@ -410,7 +410,10 @@ export default function OrderForm({ formMode }) {
       </section>
 
       <section className="card">
-        <h2 className="card-label">Delivery</h2>
+        <div className="card-label-row">
+          <h2 className="card-label">Delivery</h2>
+          <NavLink to="/calendar" className="btn-link">Check calendar →</NavLink>
+        </div>
         <div className="row-2">
           <div className="field">
             <label htmlFor="dd">Date</label>
